@@ -5,49 +5,39 @@ pipeline {
     nodejs 'node'
   }
 
-  environment {
-    DOCKERHUB_REGISTRY = 'joanroucoux/node-web-app'
-    DOCKERHUB_CREDENTIALS_ID = 'dockerhub'
-  }
-
-  stages {
-    stage('Install dependencies') {
-      steps {
-        sh 'npm install'
-      }
+      environment {
+        IMAGE_NAME = 'snehakurve7/node-cicd-app'
     }
 
-    stage('Test') {
-      steps {
-        sh 'npm test'
-      }
-    }
-
-    stage('Build Docker image') {
-      steps {
-        script {
-          sh 'docker build -t ${DOCKERHUB_REGISTRY}:${BUILD_NUMBER} .'
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/snehabopche/node-cicd-app.git'
+            }
         }
-      }
-    }
 
-    stage('Push Docker image') {
-      steps {
-        withCredentials([usernamePassword(
-          credentialsId: DOCKERHUB_CREDENTIALS_ID,
-          passwordVariable: 'DOCKERHUB_PASSWORD',
-          usernameVariable: 'DOCKERHUB_USERNAME'
-        )]) {
-          sh 'docker login -u ${DOCKERHUB_USERNAME} -p ${DOCKERHUB_PASSWORD}'
-          sh 'docker push ${DOCKERHUB_REGISTRY}:${BUILD_NUMBER}'
+
+            stage('Build') {
+            steps {
+                sh 'docker build -t $IMAGE_NAME .'
+            }
         }
-      }
-    }
-  }
 
-  post {
-    always {
-      sh 'docker logout'
+            stage('Push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push $IMAGE_NAME
+                    '''
+                }
+            }
+        }
+        stage('Deploy') {
+            steps {
+                sh 'kubectl apply -f k8s/'
+            }
+        }
     }
-  }
 }
+
